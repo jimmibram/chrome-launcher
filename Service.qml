@@ -1,6 +1,7 @@
 import Quickshell
 import Quickshell.Hyprland
 import QtQuick
+import qs.Commons
 
 // Takes over Omarchy's browser key (SUPER+SHIFT+RETURN) while the plugin is
 // enabled, so installing it is all it takes. The binding lives only in the
@@ -16,10 +17,19 @@ Item {
   readonly property string keys: "SUPER + SHIFT + RETURN"
   readonly property string script: decodeURIComponent(String(Qt.resolvedUrl("bin/chrome-launcher")).replace(/^file:\/\//, ""))
 
+  // Quote a value as a Lua string literal: backslash, double quote and control
+  // characters become \ddd escapes, so nothing in it can be read as code.
+  function luaString(value) {
+    return '"' + String(value).replace(/[\\"\x00-\x1f\x7f]/g, function(c) {
+      var n = c.charCodeAt(0)
+      return "\\" + (n < 10 ? "00" : n < 100 ? "0" : "") + n
+    }) + '"'
+  }
+
   function bind() {
-    // JSON string literals are valid Lua string literals for a plain path.
-    var lua = "hl.unbind(" + JSON.stringify(root.keys) + ")"
-      + " hl.bind(" + JSON.stringify(root.keys) + ", hl.dsp.exec_cmd(" + JSON.stringify(root.script) + "),"
+    // exec_cmd runs its argument through /bin/sh, so the path is shell-quoted too.
+    var lua = "hl.unbind(" + luaString(root.keys) + ")"
+      + " hl.bind(" + luaString(root.keys) + ", hl.dsp.exec_cmd(" + luaString(Util.shellQuote(root.script)) + "),"
       + " { description = \"Chrome Launcher\" })"
     Quickshell.execDetached(["hyprctl", "eval", lua])
   }
