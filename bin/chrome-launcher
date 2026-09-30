@@ -1,0 +1,97 @@
+#!/bin/bash
+# Chrome Launcher: pick a Chrome or Chromium profile with the arrow keys, then open
+# a NEW window for it on the current workspace, even if that profile already has
+# a window elsewhere. Uses the default browser; pass "chrome" or "chromium" to
+# force one. With a single profile it opens that one without asking.
+
+set -euo pipefail
+
+browser=${1:-}
+if [[ -z $browser ]]; then
+  case $(xdg-settings get default-web-browser 2>/dev/null) in
+    chromium.desktop) browser=chromium ;;
+    google-chrome*.desktop) browser=chrome ;;
+    *) command -v google-chrome-stable >/dev/null && browser=chrome || browser=chromium ;;
+  esac
+fi
+
+# config dir, command, window class (also the icon name)
+case $browser in
+  chrome) config=google-chrome command=google-chrome-stable class=google-chrome ;;
+  chromium) config=chromium command=chromium class=chromium ;;
+  *) echo "chrome-launcher: unknown browser '$browser' (use chrome or chromium)" >&2; exit 1 ;;
+esac
+
+local_state="$HOME/.config/$config/Local State"
+icon=""
+for size in 256x256 128x128 64x64 48x48; do
+  [[ -f /usr/share/icons/hicolor/$size/apps/$class.png ]] && icon=/usr/share/icons/hicolor/$size/apps/$class.png && break
+done
+
+selection_file=$(mktemp)
+done_file=$(mktemp)
+rm -f "$done_file"
+trap 'rm -f "$selection_file" "$done_file"' EXIT
+
+# Profiles as a cross (plugin jimmibram.chrome-launcher), in the browser's own order:
+# first is left, second right, third up, fourth down.
+payload=$(python3 - "$local_state" "$selection_file" "$done_file" "$icon" <<'PY2'
+import json, os, sys
+state, selection, done, icon = sys.argv[1:5]
+root = os.path.dirname(state)
+p = json.load(open(state))["profile"]
+profiles = []
+cache = p["info_cache"]
+order = [d for d in p.get("profiles_order", []) if d in cache] + [d for d in cache if d not in p.get("profiles_order", [])]
+for d in order:
+    v = cache[d]
+    pic = os.path.join(root, d, v.get("gaia_picture_file_name") or "")
+    profiles.append({
+        "dir": d,
+        "name": v.get("name") or d,
+        "email": v.get("user_name") or "",
+        "picture": pic if os.path.isfile(pic) else "",
+    })
+print(json.dumps({"profiles": profiles, "icon": icon, "selectionFile": selection, "doneFile": done}))
+PY2
+)
+
+if [[ $(jq '.profiles | length' <<<"$payload") == 1 ]]; then
+  # Only one profile: nothing to choose, open it straight away.
+  dir=$(jq -r '.profiles[0].dir' <<<"$payload")
+else
+  if [[ $(omarchy-shell shell summon jimmibram.chrome-launcher "$payload" 2>/dev/null) != ok ]]; then
+    notify-send "Chrome Launcher" "The plugin isn't enabled. Run: omarchy plugin enable jimmibram.chrome-launcher"
+    exit 1
+  fi
+  while [[ ! -e $done_file ]]; do
+    sleep 0.05
+  done
+  dir=$(<"$selection_file")
+fi
+[[ -n $dir ]] || exit 0
+
+# The browser hands the request to its running process, which would open the window
+# on the workspace of that profile's existing window. A temporary window rule
+# makes it open on our workspace, then it's turned off again once the window has
+# appeared (or after 10 seconds).
+workspace=$(hyprctl activeworkspace -j | jq -r '.name')
+events="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock"
+
+rule() {
+  hyprctl eval "hl.window_rule({ name = 'chrome-launcher', match = { class = '^$class$' }, workspace = '$workspace', enabled = $1 })" >/dev/null
+}
+
+coproc WATCH { timeout 10 socat -u "UNIX-CONNECT:$events" - 2>/dev/null; }
+trap 'rule false; kill "$WATCH_PID" 2>/dev/null || true; rm -f "$selection_file" "$done_file"' EXIT
+rule true
+sleep 0.1  # let the watcher connect first
+# Start the browser directly: omarchy-launch-browser takes its first argument for a
+# URL and then focuses an existing Chrome window, which jumps workspaces.
+systemd-run --user --quiet --collect --unit="chrome-launcher-$(date +%s%N)" \
+  --property=StandardOutput=null --property=StandardError=null \
+  uwsm-app -- "$command" --profile-directory="$dir" --new-window
+
+while IFS= read -r line <&"${WATCH[0]}"; do
+  [[ $line == openwindow\>\>*,"$class",* ]] && break
+done
