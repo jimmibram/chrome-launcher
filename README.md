@@ -6,7 +6,7 @@ that profile happens to have a window open already.
 
 A plugin for the [Omarchy](https://omarchy.org) shell.
 
-![Chrome Launcher with two profiles](screenshots/chrome-launcher-2-profiles.png)
+![Chrome Launcher with two profiles](screenshots/2-profiles.png)
 
 ## What it does
 
@@ -24,7 +24,7 @@ A plugin for the [Omarchy](https://omarchy.org) shell.
 
 | Three profiles | Four profiles |
 |---|---|
-| ![Three profiles](screenshots/chrome-launcher-3-profiles.png) | ![Four profiles](screenshots/chrome-launcher-4-profiles.png) |
+| ![Three profiles](screenshots/3-profiles.png) | ![Four profiles](screenshots/4-profiles.png) |
 
 ## Install
 
