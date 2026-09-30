@@ -32,15 +32,16 @@ A plugin for the [Omarchy](https://omarchy.org) shell.
 omarchy plugin add https://github.com/jimmibram/chrome-launcher.git --enable
 ```
 
-Then give it a key. Add this to `~/.config/hypr/bindings.lua` to take over
-SUPER+SHIFT+RETURN (Omarchy's default browser key):
+That's it: SUPER+SHIFT+RETURN (Omarchy's browser key) now opens the picker.
 
-```lua
-hl.unbind("SUPER + SHIFT + RETURN")
-o.bind("SUPER + SHIFT + RETURN", "Chrome Launcher", "~/.config/omarchy/plugins/jimmibram.chrome-launcher/bin/chrome-launcher")
-```
+The plugin takes over that key only while it is enabled, and it doesn't touch
+your config files. Disable or remove it and the key goes back to Omarchy's own
+browser launcher.
 
-Hyprland reloads the file on save, so the key works right away.
+If you're updating from 1.0 and the key hasn't switched over, restart the shell
+once with `omarchy-restart-shell`. You can also delete the two lines 1.0 had
+you add to `~/.config/hypr/bindings.lua`. They do no harm, but you no longer
+need them.
 
 ## Using it
 
@@ -81,8 +82,6 @@ Everything else it uses (`jq`, `socat`, `python`) ships with Omarchy.
 omarchy plugin update jimmibram.chrome-launcher
 omarchy plugin remove jimmibram.chrome-launcher
 ```
-
-After removing it, take the two lines back out of `bindings.lua`.
 
 ## License
 

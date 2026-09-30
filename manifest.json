@@ -2,14 +2,16 @@
   "schemaVersion": 1,
   "id": "jimmibram.chrome-launcher",
   "name": "Chrome Launcher",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "jimmibram",
   "description": "Pick a Chrome or Chromium profile with the arrow keys and open a new window on the current workspace",
   "kinds": [
-    "overlay"
+    "overlay",
+    "service"
   ],
   "keepLoaded": true,
   "entryPoints": {
-    "overlay": "ChromeLauncher.qml"
+    "overlay": "ChromeLauncher.qml",
+    "service": "Service.qml"
   }
 }
