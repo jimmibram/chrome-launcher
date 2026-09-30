@@ -29,7 +29,7 @@ A plugin for the [Omarchy](https://omarchy.org) shell.
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/JimmiBram/chrome-launcher.git --enable
+omarchy plugin add https://github.com/jimmibram/chrome-launcher.git --enable
 ```
 
 Then give it a key. Add this to `~/.config/hypr/bindings.lua` to take over
