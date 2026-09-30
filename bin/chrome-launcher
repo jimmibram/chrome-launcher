@@ -88,9 +88,7 @@ rule true
 sleep 0.1  # let the watcher connect first
 # Start the browser directly: omarchy-launch-browser takes its first argument for a
 # URL and then focuses an existing Chrome window, which jumps workspaces.
-systemd-run --user --quiet --collect --unit="chrome-launcher-$(date +%s%N)" \
-  --property=StandardOutput=null --property=StandardError=null \
-  uwsm-app -- "$command" --profile-directory="$dir" --new-window
+setsid -f uwsm-app -- "$command" --profile-directory="$dir" --new-window >/dev/null 2>&1
 
 while IFS= read -r line <&"${WATCH[0]}"; do
   [[ $line == openwindow\>\>*,"$class",* ]] && break
