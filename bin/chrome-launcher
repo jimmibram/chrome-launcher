@@ -78,8 +78,19 @@ fi
 workspace=$(hyprctl activeworkspace -j | jq -r '.name')
 events="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock"
 
+# Quote a value as a Lua string literal. The workspace name comes from the user's
+# config, so it must never be spliced into the eval'd program as code.
+lua_string() {
+  local s=$1
+  s=${s//\\/\\\\}
+  s=${s//\'/\\\'}
+  s=${s//$'\n'/\\n}
+  s=${s//$'\r'/\\r}
+  printf "'%s'" "$s"
+}
+
 rule() {
-  hyprctl eval "hl.window_rule({ name = 'chrome-launcher', match = { class = '^$class$' }, workspace = '$workspace', enabled = $1 })" >/dev/null
+  hyprctl eval "hl.window_rule({ name = 'chrome-launcher', match = { class = '^$class$' }, workspace = $(lua_string "$workspace"), enabled = $1 })" >/dev/null
 }
 
 coproc WATCH { timeout 10 socat -u "UNIX-CONNECT:$events" - 2>/dev/null; }
