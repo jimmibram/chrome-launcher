@@ -28,6 +28,10 @@ A plugin for the [Omarchy](https://omarchy.org) shell.
 |---|---|
 | ![Three profiles](screenshots/3-profiles.png) | ![Four profiles](screenshots/4-profiles.png) |
 
+With five or more, the profiles line up in a numbered row:
+
+![Six profiles in a row](screenshots/6-profiles.png)
+
 ## Install
 
 ```bash
