@@ -21,7 +21,7 @@ Item {
   property bool opened: false
   property var profiles: []
   property int hoveredIndex: -1
-  property int chosenIndex: -1  // the profile just picked, shown with a bright edge
+  property int chosenIndex: -1  // the profile just picked (and already answered), shown with a bright edge
   property string dir: ""  // the waiting script's directory, empty once answered
 
   property color background: Color.menu.background
@@ -89,7 +89,7 @@ Item {
   }
 
   function finish(choice) {
-    confirmTimer.stop()
+    closeTimer.stop()
     root.chosenIndex = -1
     root.opened = false
     root.release(choice)
@@ -107,18 +107,17 @@ Item {
 
   function activate(index) {
     if (index < 0 || index >= root.profiles.length || root.chosenIndex !== -1) return
-    // Outline the choice at once, keep it on screen for a beat, then open it.
+    // Outline the choice and answer the script at once, so the browser starts
+    // right away; the picker itself stays on screen for a beat before closing.
     root.chosenIndex = index
-    confirmTimer.start()
+    root.release(root.profiles[index].dir)
+    closeTimer.start()
   }
 
   Timer {
-    id: confirmTimer
+    id: closeTimer
     interval: 320
-    onTriggered: {
-      var index = root.chosenIndex
-      if (index >= 0 && index < root.profiles.length) root.finish(root.profiles[index].dir)
-    }
+    onTriggered: root.finish(null)  // already answered: this only hides
   }
 
   PanelWindow {
