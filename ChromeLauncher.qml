@@ -322,8 +322,13 @@ Item {
             border.width: chosen ? Math.max(2, Style.space(2)) : Math.max(1, Style.space(1))
             border.color: chosen ? root.selectedText : current ? root.selectedBackground : root.border
 
+            // Cross: centred in the tile. Row: pinned to the top, so the keycaps
+            // sit at one height whatever each tile has below them.
             Column {
-              anchors.centerIn: parent
+              anchors.horizontalCenter: parent.horizontalCenter
+              anchors.verticalCenter: root.rowMode ? undefined : parent.verticalCenter
+              anchors.top: root.rowMode ? parent.top : undefined
+              anchors.topMargin: Style.space(16)
               width: parent.width - Style.space(16)
               spacing: Style.space(8)
 
@@ -376,7 +381,7 @@ Item {
                 width: parent.width
                 textFormat: Text.PlainText
                 text: modelData.email || ""
-                visible: root.rowMode || text !== ""  // in the row, keep the line so tiles align
+                visible: text !== ""
                 color: current ? root.selectedText : root.foreground
                 opacity: 0.65
                 font.family: root.fontFamily
