@@ -10,7 +10,7 @@ import qs.Ui
 // Profiles laid out as a cross around an empty centre: left, right, then up and
 // down once there are 3-4 profiles. An arrow key opens its profile at once.
 // Summoned by bin/chrome-launcher with { dir }, the script's private directory.
-// dir/payload.json holds { profiles: [{ dir, name, email, picture }], icon }.
+// dir/payload.json holds { profiles: [{ dir, name, email, picture }] }.
 // The chosen profile's dir is written to dir/selection, then dir/done is created.
 Item {
   id: root
@@ -20,8 +20,8 @@ Item {
 
   property bool opened: false
   property var profiles: []
-  property string icon: ""
   property int hoveredIndex: -1
+  property int chosenIndex: -1  // the profile just picked, shown lit while the rest dims
   property string dir: ""  // the waiting script's directory, empty once answered
 
   property color background: Color.menu.background
@@ -37,6 +37,7 @@ Item {
   property int tileSize: Style.space(180)
   property int tileSpacing: Style.spacing.md
   property int avatarSize: Style.space(88)
+  property int keycapSize: Style.space(46)
 
   function open(requestJson) {
     // Summoned again while already up: the script behind the first summon is
@@ -55,8 +56,8 @@ Item {
     var payload = {}
     try { payload = JSON.parse(payloadJson || "{}") } catch (e) {}
     root.profiles = payload.profiles || []
-    root.icon = String(payload.icon || "")
     root.hoveredIndex = -1
+    root.chosenIndex = -1
     root.opened = true
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
@@ -88,6 +89,8 @@ Item {
   }
 
   function finish(choice) {
+    confirmTimer.stop()
+    root.chosenIndex = -1
     root.opened = false
     root.release(choice)
     if (root.shell && typeof root.shell.hide === "function")
@@ -103,8 +106,19 @@ Item {
   readonly property int step: tileSize + tileSpacing
 
   function activate(index) {
-    if (index < 0 || index >= root.profiles.length) return
-    root.finish(root.profiles[index].dir)
+    if (index < 0 || index >= root.profiles.length || root.chosenIndex !== -1) return
+    // Light the choice up and dim the rest for a beat, then open it.
+    root.chosenIndex = index
+    confirmTimer.start()
+  }
+
+  Timer {
+    id: confirmTimer
+    interval: 320
+    onTriggered: {
+      var index = root.chosenIndex
+      if (index >= 0 && index < root.profiles.length) root.finish(root.profiles[index].dir)
+    }
   }
 
   PanelWindow {
@@ -124,7 +138,7 @@ Item {
 
     MouseArea {
       anchors.fill: parent
-      onClicked: root.finish(null)
+      onClicked: if (root.chosenIndex === -1) root.finish(null)
     }
 
     BorderSurface {
@@ -147,7 +161,7 @@ Item {
         Keys.priority: Keys.BeforeItem
         Keys.onPressed: function(event) {
           var k = event.key
-          if (k === Qt.Key_Escape) root.finish(null)
+          if (k === Qt.Key_Escape) { if (root.chosenIndex === -1) root.finish(null) }
           else if (k === Qt.Key_Left) root.activate(0)
           else if (k === Qt.Key_Right) root.activate(1)
           else if (k === Qt.Key_Up) root.activate(2)
@@ -163,7 +177,8 @@ Item {
         width: root.step * 3 - root.tileSpacing
         height: root.step * (1 + root.hasUp + root.hasDown) - root.tileSpacing
 
-        // The centre, where the "cursor" starts: the browser's own icon, faded.
+        // The centre: a label, and a keycap for each profile's arrow key at the
+        // edge nearest to it. The chosen one lights up; the rest dim with the tiles.
         Rectangle {
           x: root.step
           y: (1 - root.topRow) * root.step
@@ -174,54 +189,82 @@ Item {
           border.width: Math.max(1, Style.space(1))
           border.color: Qt.rgba(root.border.r, root.border.g, root.border.b, 0.35)
 
-          Image {
+          Text {
             anchors.centerIn: parent
-            width: root.avatarSize
-            height: root.avatarSize
-            source: root.icon ? "file://" + root.icon : ""
-            sourceSize: Qt.size(root.avatarSize * 2, root.avatarSize * 2)
-            fillMode: Image.PreserveAspectFit
-            smooth: true
-            opacity: 0.12
+            width: parent.width - root.keycapSize * 2 - Style.space(16)
+            text: "SELECT PROFILE"
+            textFormat: Text.PlainText
+            color: root.foreground
+            opacity: root.chosenIndex === -1 ? 0.7 : 0.3
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.bodySmall
+            font.weight: Font.DemiBold
+            font.letterSpacing: Style.space(2)
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.WordWrap
+            Behavior on opacity { NumberAnimation { duration: 120 } }
           }
 
-          // Thick arrows pointing at each profile; the hovered one lights up.
           Repeater {
             model: Math.min(root.profiles.length, 4)
 
-            // Drawn pointing right, then rotated towards its profile's slot.
-            delegate: Shape {
-              id: arrow
+            // A keycap with a triangle, drawn pointing right and rotated towards
+            // its profile's slot.
+            delegate: Item {
+              id: keycap
               required property int index
               readonly property var dir: root.slots[index]  // [col, row], centre is [1, 1]
-              readonly property real inset: Style.space(12)
-              readonly property real size: Style.space(40)
-              readonly property real stroke: Style.space(7)
-              readonly property bool lit: index === root.hoveredIndex
+              readonly property real inset: Style.space(10)
+              readonly property real lift: Math.max(2, Style.space(3))  // the cap sits this far above its base
+              readonly property bool lit: index === root.chosenIndex || (root.chosenIndex === -1 && index === root.hoveredIndex)
+              readonly property bool dimmed: root.chosenIndex !== -1 && index !== root.chosenIndex
 
-              width: size
-              height: size
+              width: root.keycapSize
+              height: root.keycapSize
               x: dir[0] === 0 ? inset : dir[0] === 2 ? parent.width - width - inset : (parent.width - width) / 2
               y: dir[1] === 0 ? inset : dir[1] === 2 ? parent.height - height - inset : (parent.height - height) / 2
               rotation: [180, 0, 270, 90][index]
-              preferredRendererType: Shape.CurveRenderer
-              opacity: lit ? 1 : 0.85
-              scale: lit ? 1.15 : 1
+              opacity: dimmed ? 0.3 : 1
+              scale: lit ? 1.1 : 1
+              Behavior on opacity { NumberAnimation { duration: 120 } }
               Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
 
-              ShapePath {
-                strokeColor: arrow.lit ? root.selectedText : root.foreground
-                strokeWidth: arrow.stroke
-                fillColor: "transparent"
-                capStyle: ShapePath.RoundCap
-                joinStyle: ShapePath.RoundJoin
-                // shaft
-                startX: arrow.stroke / 2; startY: arrow.size / 2
-                PathLine { x: arrow.size - arrow.stroke / 2; y: arrow.size / 2 }
-                // head
-                PathMove { x: arrow.size * 0.55; y: arrow.stroke / 2 + arrow.size * 0.05 }
-                PathLine { x: arrow.size - arrow.stroke / 2; y: arrow.size / 2 }
-                PathLine { x: arrow.size * 0.55; y: arrow.size - arrow.stroke / 2 - arrow.size * 0.05 }
+              // Base: the darker edge the cap stands on, offset along the key's
+              // own "down" so it reads as a keycap at every rotation.
+              Rectangle {
+                anchors.fill: cap
+                anchors.topMargin: keycap.lift
+                anchors.bottomMargin: -keycap.lift
+                radius: cap.radius
+                color: keycap.lit ? Qt.darker(root.selectedBackground, 1.4) : Qt.rgba(root.border.r, root.border.g, root.border.b, 0.9)
+              }
+
+              Rectangle {
+                id: cap
+                anchors.fill: parent
+                anchors.bottomMargin: keycap.lift
+                radius: Style.space(8)
+                color: keycap.lit ? root.selectedBackground : root.background
+                border.width: Math.max(1, Style.space(1))
+                border.color: keycap.lit ? root.selectedBackground : root.border
+
+                Shape {
+                  id: triangle
+                  anchors.centerIn: parent
+                  width: parent.width * 0.42
+                  height: parent.height * 0.42
+                  preferredRendererType: Shape.CurveRenderer
+
+                  ShapePath {
+                    strokeWidth: -1
+                    fillColor: keycap.lit ? root.selectedText : root.foreground
+                    joinStyle: ShapePath.RoundJoin
+                    startX: 0; startY: 0
+                    PathLine { x: triangle.width; y: triangle.height / 2 }
+                    PathLine { x: 0; y: triangle.height }
+                    PathLine { x: 0; y: 0 }
+                  }
+                }
               }
             }
           }
@@ -233,7 +276,8 @@ Item {
           delegate: Rectangle {
             required property var modelData
             required property int index
-            readonly property bool current: index === root.hoveredIndex
+            readonly property bool current: index === root.chosenIndex || (root.chosenIndex === -1 && index === root.hoveredIndex)
+            readonly property bool dimmed: root.chosenIndex !== -1 && index !== root.chosenIndex
             readonly property var slot: root.slots[index]
 
             x: slot[0] * root.step
@@ -242,6 +286,8 @@ Item {
             height: root.tileSize
             radius: root.cornerRadius
             color: current ? root.selectedBackground : "transparent"
+            opacity: dimmed ? 0.3 : 1
+            Behavior on opacity { NumberAnimation { duration: 120 } }
             border.width: Math.max(1, Style.space(1))
             border.color: current ? root.selectedBackground : root.border
 
