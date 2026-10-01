@@ -37,7 +37,7 @@ Item {
   property int tileSize: Style.space(180)
   property int tileSpacing: Style.spacing.md
   property int avatarSize: Style.space(88)
-  property int keycapSize: Style.space(46)
+  property int keycapSize: Style.space(38)
 
   function open(requestJson) {
     // Summoned again while already up: the script behind the first summon is
@@ -208,7 +208,8 @@ Item {
             model: Math.min(root.profiles.length, 4)
 
             // A keycap with a triangle, drawn pointing right and rotated towards
-            // its profile's slot.
+            // its profile's slot. Only the triangle turns: the cap and its base
+            // stay upright so the base edge is at the bottom of every key.
             delegate: Item {
               id: keycap
               required property int index
@@ -222,12 +223,10 @@ Item {
               height: root.keycapSize
               x: dir[0] === 0 ? inset : dir[0] === 2 ? parent.width - width - inset : (parent.width - width) / 2
               y: dir[1] === 0 ? inset : dir[1] === 2 ? parent.height - height - inset : (parent.height - height) / 2
-              rotation: [180, 0, 270, 90][index]
               scale: lit ? 1.1 : 1
               Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
 
-              // Base: the darker edge the cap stands on, offset along the key's
-              // own "down" so it reads as a keycap at every rotation.
+              // Base: the darker edge the cap stands on.
               Rectangle {
                 anchors.fill: cap
                 anchors.topMargin: keycap.lift
@@ -251,6 +250,7 @@ Item {
                   anchors.centerIn: parent
                   width: parent.width * 0.42
                   height: parent.height * 0.42
+                  rotation: [180, 0, 270, 90][keycap.index]
                   preferredRendererType: Shape.CurveRenderer
 
                   ShapePath {
