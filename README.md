@@ -13,8 +13,9 @@ A plugin for the [Omarchy](https://omarchy.org) shell.
 - Press your browser key and your profiles appear in a cross, each behind its arrow key.
 - **←** opens the first profile, **→** the second, **↑** the third and **↓** the fourth.
   One key press, no Enter needed.
-- With five or more profiles they line up in a row instead, numbered, and the
-  keys **1** to **9** open them.
+- A fifth to eighth profile take the corners, and open on their two arrow keys
+  pressed together: **← ↑** for the top left, **→ ↑** the top right, **← ↓** the
+  bottom left and **→ ↓** the bottom right.
 - The new window always opens on your **current workspace**. Chrome normally
   places it next to that profile's existing window, somewhere else, and pulls
   you along with it.
@@ -28,9 +29,9 @@ A plugin for the [Omarchy](https://omarchy.org) shell.
 |---|---|
 | ![Three profiles](screenshots/3-profiles.png) | ![Four profiles](screenshots/4-profiles.png) |
 
-With five or more, the profiles line up in a numbered row:
+With five or more, the corners fill up, each behind a pair of arrow keys:
 
-![Six profiles in a row](screenshots/6-profiles.png)
+![Eight profiles](screenshots/8-profiles.png)
 
 ## Install
 
@@ -54,13 +55,15 @@ need them.
 
 | Key | Action |
 |---|---|
-| ← → ↑ ↓ | Open that profile in a new window (up to four profiles) |
-| 1 … 9 | Open that profile in a new window (five or more, shown in a row) |
+| ← → ↑ ↓ | Open that profile in a new window |
+| ← ↑, → ↑, ← ↓, → ↓ (together) | Open the profile in that corner (the fifth to eighth) |
 | Esc, or click outside | Cancel |
 | Mouse | Hover a profile to light up its arrow, click to open |
 
 Profiles appear in the order Chrome keeps them in, so each key always opens
-the same profile. The picker shows up to nine profiles.
+the same profile. The picker shows up to eight profiles. The two keys of a
+corner needn't land in the same instant: once a corner is in use, a single
+arrow that could be part of a pair waits a fifth of a second for the other.
 
 To force a browser regardless of your default, pass it as an argument:
 

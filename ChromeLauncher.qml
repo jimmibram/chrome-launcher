@@ -7,9 +7,10 @@ import QtQuick.Shapes
 import qs.Commons
 import qs.Ui
 
-// Up to four profiles are laid out as a cross around an empty centre: left,
-// right, then up and down, and an arrow key opens its profile at once. Five or
-// more go in a row, numbered, and the digit keys 1-9 open them.
+// Up to eight profiles are laid out around an empty centre: left, right, up and
+// down first, and an arrow key opens its profile at once. The fifth to eighth
+// take the corners, up-left, up-right, down-left, down-right, and open on their
+// two arrow keys pressed together.
 // Summoned by bin/chrome-launcher with { dir }, the script's private directory.
 // dir/payload.json holds { profiles: [{ dir, name, email, picture }] }.
 // The chosen profile's dir is written to dir/selection, then dir/done is created.
@@ -39,6 +40,9 @@ Item {
   property int tileSpacing: Style.spacing.md
   property int avatarSize: Style.space(88)
   property int keycapSize: Style.space(38)
+  property int cornerKeycapSize: Style.space(26)
+  // How long after one arrow a second one still counts as pressed together.
+  property int chordWindow: 200
 
   function open(requestJson) {
     // Summoned again while already up: the script behind the first summon is
@@ -59,6 +63,8 @@ Item {
     root.profiles = payload.profiles || []
     root.hoveredIndex = -1
     root.chosenIndex = -1
+    root.pendingSlot = -1
+    chordTimer.stop()
     root.opened = true
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
@@ -91,6 +97,8 @@ Item {
 
   function finish(choice) {
     closeTimer.stop()
+    chordTimer.stop()
+    root.pendingSlot = -1
     root.chosenIndex = -1
     root.opened = false
     root.release(choice)
@@ -98,34 +106,66 @@ Item {
       root.shell.hide((root.manifest && root.manifest.id) || "jimmibram.chrome-launcher")
   }
 
-  // Slot order: left, right, up, down (column, row in a 3x3 grid).
-  readonly property var slots: [[0, 1], [2, 1], [1, 0], [1, 2]]
-  // Rows only exist when there is a profile in them: up with 3+, down with 4.
+  // Slot order: left, right, up, down, then the corners up-left, up-right,
+  // down-left, down-right (column, row in a 3x3 grid).
+  readonly property var slots: [[0, 1], [2, 1], [1, 0], [1, 2], [0, 0], [2, 0], [0, 2], [2, 2]]
+  readonly property int shown: Math.min(profiles.length, 8)
+  // Rows only exist when there is a profile in them: up with 3+, down with 4+.
   readonly property bool hasUp: profiles.length > 2
   readonly property bool hasDown: profiles.length > 3
   readonly property int topRow: hasUp ? 0 : 1
   readonly property int step: tileSize + tileSpacing
 
-  // Five or more profiles: a numbered row instead of the cross, up to nine (one
-  // per digit key). Tiles narrow to fit the screen, and grow a keycap on top.
-  readonly property bool rowMode: profiles.length > 4
-  readonly property int shown: Math.min(profiles.length, rowMode ? 9 : 4)
-  readonly property int rowTileWidth: Math.max(avatarSize + Style.space(24),
-    Math.min(tileSize, Math.floor((panel.width - contentMargin * 2 - Style.space(80) - (shown - 1) * tileSpacing) / Math.max(shown, 1))))
-  readonly property int rowTileHeight: tileSize + keycapSize + Style.space(8)
-  readonly property int rowLabelHeight: Style.space(32)
+  // The arrows that open a corner: its horizontal one (left or right) and its
+  // vertical one (up or down), as slots.
+  function cornerArrows(slot) {
+    return [(slot - 4) % 2, 2 + Math.floor((slot - 4) / 2)]
+  }
 
-  // A key on the keyboard: a triangle pointing at its profile in the cross, or
-  // a digit in the row. Lights up when hovered, gets a bright edge when chosen.
+  // The corner two arrows open together, or -1 when they are on one axis.
+  function corner(a, b) {
+    var h = a < 2 ? a : b < 2 ? b : -1
+    var v = a > 1 ? a : b > 1 ? b : -1
+    return h < 0 || v < 0 ? -1 : 4 + (v - 2) * 2 + h
+  }
+
+  // An arrow key. With a corner profile reachable from it, the pick waits a
+  // moment for the second arrow, so the two needn't land in the same instant.
+  property int pendingSlot: -1
+  function arrow(slot) {
+    if (root.chosenIndex !== -1) return
+    if (root.pendingSlot !== -1) {
+      var c = root.corner(root.pendingSlot, slot)
+      if (c >= 0 && c < root.shown) root.activate(c)
+      return  // same axis, or no profile in that corner: the first arrow's pick stands
+    }
+    var waits = false
+    for (var i = 4; i < root.shown; i++) {
+      var arrows = root.cornerArrows(i)
+      if (arrows[0] === slot || arrows[1] === slot) waits = true
+    }
+    if (!waits) { root.activate(slot); return }
+    root.pendingSlot = slot
+    chordTimer.restart()
+  }
+
+  Timer {
+    id: chordTimer
+    interval: root.chordWindow
+    onTriggered: root.activate(root.pendingSlot)
+  }
+
+  // A key on the keyboard: a triangle pointing at its profile. Lights up when
+  // hovered, gets a bright edge when chosen.
   component Keycap: Rectangle {
     id: keycap
     property bool lit: false
     property bool chosen: false
-    property string label: ""   // a digit; empty draws the triangle instead
     property int arrowIndex: 0  // slot the triangle points at
+    property int size: root.keycapSize
 
-    width: root.keycapSize
-    height: root.keycapSize
+    width: size
+    height: size
     radius: Style.space(8)
     color: lit ? root.selectedBackground : root.background
     border.width: chosen ? Math.max(2, Style.space(2)) : Math.max(1, Style.space(1))
@@ -134,7 +174,6 @@ Item {
 
     Shape {
       id: triangle
-      visible: keycap.label === ""
       anchors.centerIn: parent
       width: parent.width * 0.42
       height: parent.height * 0.42
@@ -151,21 +190,12 @@ Item {
         PathLine { x: 0; y: 0 }
       }
     }
-
-    Text {
-      visible: keycap.label !== ""
-      anchors.centerIn: parent
-      text: keycap.label
-      textFormat: Text.PlainText
-      color: keycap.lit ? root.selectedText : root.foreground
-      font.family: root.fontFamily
-      font.pixelSize: Style.font.heading
-      font.weight: Font.DemiBold
-    }
   }
 
   function activate(index) {
-    if (index < 0 || index >= root.profiles.length || root.chosenIndex !== -1) return
+    chordTimer.stop()
+    root.pendingSlot = -1
+    if (index < 0 || index >= root.shown || root.chosenIndex !== -1) return
     // Outline the choice and answer the script at once, so the browser starts
     // right away; the picker itself stays on screen for a beat before closing.
     root.chosenIndex = index
@@ -218,14 +248,13 @@ Item {
 
         Keys.priority: Keys.BeforeItem
         Keys.onPressed: function(event) {
+          if (event.isAutoRepeat) return
           var k = event.key
           if (k === Qt.Key_Escape) { if (root.chosenIndex === -1) root.finish(null) }
-          else if (k >= Qt.Key_1 && k <= Qt.Key_9) root.activate(k - Qt.Key_1)
-          else if (root.rowMode) return
-          else if (k === Qt.Key_Left) root.activate(0)
-          else if (k === Qt.Key_Right) root.activate(1)
-          else if (k === Qt.Key_Up) root.activate(2)
-          else if (k === Qt.Key_Down) root.activate(3)
+          else if (k === Qt.Key_Left) root.arrow(0)
+          else if (k === Qt.Key_Right) root.arrow(1)
+          else if (k === Qt.Key_Up) root.arrow(2)
+          else if (k === Qt.Key_Down) root.arrow(3)
           else return
           event.accepted = true
         }
@@ -234,34 +263,13 @@ Item {
       Item {
         id: tiles
         anchors.centerIn: parent
-        width: root.rowMode
-          ? root.shown * (root.rowTileWidth + root.tileSpacing) - root.tileSpacing
-          : root.step * 3 - root.tileSpacing
-        height: root.rowMode
-          ? root.rowLabelHeight + root.rowTileHeight
-          : root.step * (1 + root.hasUp + root.hasDown) - root.tileSpacing
+        width: root.step * 3 - root.tileSpacing
+        height: root.step * (1 + root.hasUp + root.hasDown) - root.tileSpacing
 
-        // Row: the label goes above the tiles.
-        Text {
-          visible: root.rowMode
-          width: parent.width
-          height: root.rowLabelHeight
-          text: "SELECT PROFILE"
-          textFormat: Text.PlainText
-          color: root.foreground
-          opacity: 0.7
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.bodySmall
-          font.weight: Font.DemiBold
-          font.letterSpacing: Style.space(2)
-          horizontalAlignment: Text.AlignHCenter
-          verticalAlignment: Text.AlignTop
-        }
-
-        // Cross: the centre holds the label and a keycap for each profile's
-        // arrow key at the edge nearest to it.
+        // The centre holds the label and a keycap for each profile's arrow key
+        // at the edge nearest to it; a corner profile's two keys sit in its corner.
         Rectangle {
-          visible: !root.rowMode
+          id: centre
           x: root.step
           y: (1 - root.topRow) * root.step
           width: root.tileSize
@@ -286,18 +294,58 @@ Item {
             wrapMode: Text.WordWrap
           }
 
+          readonly property real inset: Style.space(10)
+
           Repeater {
-            model: root.rowMode ? 0 : root.shown
+            model: Math.min(root.shown, 4)
 
             delegate: Keycap {
               required property int index
               readonly property var dir: root.slots[index]  // [col, row], centre is [1, 1]
-              readonly property real inset: Style.space(10)
               arrowIndex: index
               chosen: index === root.chosenIndex
-              lit: chosen || (root.chosenIndex === -1 && index === root.hoveredIndex)
-              x: dir[0] === 0 ? inset : dir[0] === 2 ? parent.width - width - inset : (parent.width - width) / 2
-              y: dir[1] === 0 ? inset : dir[1] === 2 ? parent.height - height - inset : (parent.height - height) / 2
+              lit: chosen || (root.chosenIndex === -1 && (index === root.hoveredIndex || index === root.pendingSlot))
+              x: dir[0] === 0 ? centre.inset : dir[0] === 2 ? parent.width - width - centre.inset : (parent.width - width) / 2
+              y: dir[1] === 0 ? centre.inset : dir[1] === 2 ? parent.height - height - centre.inset : (parent.height - height) / 2
+            }
+          }
+
+          // Corners: the two keys stacked like a copy icon, the horizontal arrow
+          // behind and the vertical one in front, a little down and to the
+          // right. The stack sits on the diagonal from the middle, as far out as
+          // the single keys, so it lands halfway between the two it combines.
+          // While one arrow waits for its partner, its half of each stack lights.
+          Repeater {
+            model: Math.max(0, root.shown - 4)
+
+            delegate: Item {
+              id: pair
+              required property int index
+              readonly property int slot: index + 4
+              readonly property var dir: root.slots[slot]
+              readonly property var arrows: root.cornerArrows(slot)
+              readonly property bool chosen: slot === root.chosenIndex
+              readonly property bool lit: chosen || (root.chosenIndex === -1 && slot === root.hoveredIndex)
+              readonly property int offset: Math.round(root.cornerKeycapSize * 0.35)
+              readonly property real radius: centre.width / 2 - centre.inset - root.keycapSize / 2
+              width: root.cornerKeycapSize + offset
+              height: width
+              x: centre.width / 2 + (dir[0] === 0 ? -1 : 1) * radius / Math.SQRT2 - width / 2
+              y: centre.height / 2 + (dir[1] === 0 ? -1 : 1) * radius / Math.SQRT2 - height / 2
+
+              Keycap {
+                size: root.cornerKeycapSize
+                arrowIndex: pair.arrows[0]
+                chosen: pair.chosen
+                lit: pair.lit || (root.chosenIndex === -1 && root.pendingSlot === arrowIndex)
+              }
+              Keycap {
+                x: pair.offset; y: pair.offset
+                size: root.cornerKeycapSize
+                arrowIndex: pair.arrows[1]
+                chosen: pair.chosen
+                lit: pair.lit || (root.chosenIndex === -1 && root.pendingSlot === arrowIndex)
+              }
             }
           }
         }
@@ -310,36 +358,22 @@ Item {
             required property var modelData
             required property int index
             readonly property bool chosen: index === root.chosenIndex
-            readonly property bool current: chosen || (root.chosenIndex === -1 && index === root.hoveredIndex)
-            readonly property var slot: root.slots[Math.min(index, 3)]
+            readonly property bool current: chosen || (root.chosenIndex === -1 && (index === root.hoveredIndex || index === root.pendingSlot))
+            readonly property var slot: root.slots[index]
 
-            x: root.rowMode ? index * (root.rowTileWidth + root.tileSpacing) : slot[0] * root.step
-            y: root.rowMode ? root.rowLabelHeight : (slot[1] - root.topRow) * root.step
-            width: root.rowMode ? root.rowTileWidth : root.tileSize
-            height: root.rowMode ? root.rowTileHeight : root.tileSize
+            x: slot[0] * root.step
+            y: (slot[1] - root.topRow) * root.step
+            width: root.tileSize
+            height: root.tileSize
             radius: root.cornerRadius
             color: current ? root.selectedBackground : "transparent"
             border.width: chosen ? Math.max(2, Style.space(2)) : Math.max(1, Style.space(1))
             border.color: chosen ? root.selectedText : current ? root.selectedBackground : root.border
 
-            // Cross: centred in the tile. Row: pinned to the top, so the keycaps
-            // sit at one height whatever each tile has below them.
             Column {
-              anchors.horizontalCenter: parent.horizontalCenter
-              anchors.verticalCenter: root.rowMode ? undefined : parent.verticalCenter
-              anchors.top: root.rowMode ? parent.top : undefined
-              anchors.topMargin: Style.space(16)
+              anchors.centerIn: parent
               width: parent.width - Style.space(16)
               spacing: Style.space(8)
-
-              // Row: the digit that opens this profile sits above its picture.
-              Keycap {
-                visible: root.rowMode
-                anchors.horizontalCenter: parent.horizontalCenter
-                label: String(index + 1)
-                chosen: tile.chosen
-                lit: tile.current
-              }
 
               ClippingRectangle {
                 anchors.horizontalCenter: parent.horizontalCenter
