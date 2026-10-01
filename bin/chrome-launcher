@@ -38,7 +38,7 @@ done
 # back as selection and done. Nothing but the directory's path is ever put on a
 # command line, so no other user can read the profiles or plant files in its place.
 tmpdir=$(mktemp -d)
-trap 'rm -rf "$tmpdir"' EXIT
+trap 'kill "${PICK_PID:-}" 2>/dev/null || true; rm -rf "$tmpdir"' EXIT
 selection_file=$tmpdir/selection
 done_file=$tmpdir/done
 
@@ -74,7 +74,8 @@ elif (( count == 1 )); then
 else
   # Watch the directory for the picker's answer before summoning it, so the answer
   # can't arrive between the two. inotifywait says when its watch is in place.
-  coproc PICK { inotifywait -m -e create -e moved_to --format %f "$tmpdir" 2>&1; }
+  # (exec, so that PICK_PID is inotifywait itself and killing it ends it.)
+  coproc PICK { exec inotifywait -m -e create -e moved_to --format %f "$tmpdir" 2>&1; }
   while IFS= read -r line <&"${PICK[0]}"; do
     [[ $line == "Watches established." ]] && break
   done
@@ -94,6 +95,7 @@ else
     omarchy-shell shell ping >/dev/null 2>&1 || exit 1
   done
   kill "$PICK_PID" 2>/dev/null || true
+  PICK_PID=""
 
   dir=""
   [[ -e $selection_file ]] && dir=$(<"$selection_file")
@@ -129,7 +131,7 @@ rule_off() {
   hyprctl eval "if $rule_var then $rule_var:set_enabled(false) end; $rule_var = nil" >/dev/null
 }
 
-coproc WATCH { timeout 10 socat -u "UNIX-CONNECT:$events" - 2>/dev/null; }
+coproc WATCH { exec timeout 10 socat -u "UNIX-CONNECT:$events" - 2>/dev/null; }
 trap 'rule_off; kill "$WATCH_PID" 2>/dev/null || true; rm -rf "$tmpdir"' EXIT
 rule_on
 sleep 0.1  # let the watcher connect first
