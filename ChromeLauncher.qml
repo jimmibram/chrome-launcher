@@ -350,7 +350,7 @@ Item {
 
                 Image {
                   anchors.fill: parent
-                  source: modelData.picture ? "file://" + modelData.picture : ""
+                  source: modelData.picture ? Util.fileUrl(modelData.picture) : ""
                   sourceSize: Qt.size(root.avatarSize * 2, root.avatarSize * 2)
                   fillMode: Image.PreserveAspectCrop
                   visible: status === Image.Ready
@@ -360,6 +360,7 @@ Item {
                   anchors.centerIn: parent
                   visible: !modelData.picture
                   text: (modelData.name || "?").charAt(0).toUpperCase()
+                  textFormat: Text.PlainText
                   color: root.foreground
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.displayLarge
