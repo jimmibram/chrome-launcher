@@ -107,7 +107,7 @@ Item {
 
   function activate(index) {
     if (index < 0 || index >= root.profiles.length || root.chosenIndex !== -1) return
-    // Outline the choice for a beat, then open it.
+    // Outline the choice at once, keep it on screen for a beat, then open it.
     root.chosenIndex = index
     confirmTimer.start()
   }
@@ -222,7 +222,6 @@ Item {
               x: dir[0] === 0 ? inset : dir[0] === 2 ? parent.width - width - inset : (parent.width - width) / 2
               y: dir[1] === 0 ? inset : dir[1] === 2 ? parent.height - height - inset : (parent.height - height) / 2
               scale: lit ? 1.1 : 1
-              Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
 
               Rectangle {
                 id: cap
@@ -231,7 +230,6 @@ Item {
                 color: keycap.lit ? root.selectedBackground : root.background
                 border.width: keycap.chosen ? Math.max(2, Style.space(2)) : Math.max(1, Style.space(1))
                 border.color: keycap.chosen ? root.selectedText : keycap.lit ? root.selectedBackground : root.border
-                Behavior on border.color { ColorAnimation { duration: 120 } }
 
                 Shape {
                   id: triangle
@@ -274,7 +272,6 @@ Item {
             color: current ? root.selectedBackground : "transparent"
             border.width: chosen ? Math.max(2, Style.space(2)) : Math.max(1, Style.space(1))
             border.color: chosen ? root.selectedText : current ? root.selectedBackground : root.border
-            Behavior on border.color { ColorAnimation { duration: 120 } }
 
             Column {
               anchors.centerIn: parent
