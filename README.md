@@ -36,7 +36,8 @@ That's it: SUPER+SHIFT+RETURN (Omarchy's browser key) now opens the picker.
 
 The plugin takes over that key only while it is enabled, and it doesn't touch
 your config files. Disable or remove it and the key goes back to Omarchy's own
-browser launcher.
+browser launcher. It takes SUPER+SHIFT+RETURN whatever you have bound it to;
+if that was something of your own, it returns with the next config reload.
 
 If you're updating from 1.0 and the key hasn't switched over, restart the shell
 once with `omarchy-restart-shell`. You can also delete the two lines 1.0 had
@@ -63,18 +64,20 @@ To force a browser regardless of your default, pass it as an argument:
 
 ## How it works
 
-The script reads the browser's profile list from its `Local State` file and
-shows the picker as an Omarchy shell overlay. When you choose a profile, it
-starts the browser with `--profile-directory=… --new-window`, with a temporary
-Hyprland window rule that puts the new window on your current workspace. The
-rule is turned off again as soon as the window appears.
+The script reads the browser's profile list from its `Local State` file into a
+private temporary directory and shows the picker as an Omarchy shell overlay.
+The picker writes your choice back into that directory, which the script
+watches with inotify. It then starts the browser with
+`--profile-directory=… --new-window`, with a temporary Hyprland window rule that
+puts the new window on your current workspace. The rule is turned off again as
+soon as the window appears.
 
 ## Requirements
 
 - Omarchy with the Lua-based Hyprland config (Hyprland 0.56 or later)
 - Google Chrome (`google-chrome-stable`) or Chromium (`chromium`)
 
-Everything else it uses (`jq`, `socat`, `python`) ships with Omarchy.
+Everything else it uses (`jq`, `socat`, `inotifywait`, `python`) ships with Omarchy.
 
 ## Update and uninstall
 

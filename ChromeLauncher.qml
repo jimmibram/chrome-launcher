@@ -9,9 +9,9 @@ import qs.Ui
 
 // Profiles laid out as a cross around an empty centre: left, right, then up and
 // down once there are 3-4 profiles. An arrow key opens its profile at once.
-// Summoned by bin/chrome-launcher
-// with { profiles: [{ dir, name, email, picture }], icon, selectionFile, doneFile }.
-// The chosen profile's dir is written to selectionFile, then doneFile is created.
+// Summoned by bin/chrome-launcher with { dir }, the script's private directory.
+// dir/payload.json holds { profiles: [{ dir, name, email, picture }], icon }.
+// The chosen profile's dir is written to dir/selection, then dir/done is created.
 Item {
   id: root
 
@@ -22,8 +22,7 @@ Item {
   property var profiles: []
   property string icon: ""
   property int hoveredIndex: -1
-  property string selectionFile: ""
-  property string doneFile: ""
+  property string dir: ""  // the waiting script's directory, empty once answered
 
   property color background: Color.menu.background
   property color foreground: Color.menu.text
@@ -39,16 +38,34 @@ Item {
   property int tileSpacing: Style.spacing.md
   property int avatarSize: Style.space(88)
 
-  function open(payloadJson) {
+  function open(requestJson) {
+    // Summoned again while already up: the script behind the first summon is
+    // still waiting, so answer it (cancelled) before taking the new one.
+    if (root.dir) root.release(null)
+    var request = {}
+    try { request = JSON.parse(requestJson || "{}") } catch (e) {}
+    root.dir = String(request.dir || "")
+    if (!root.dir) { root.finish(null); return }
+    var path = root.dir + "/payload.json"
+    if (payloadFile.path === path) payloadFile.reload()
+    else payloadFile.path = path
+  }
+
+  function show(payloadJson) {
     var payload = {}
     try { payload = JSON.parse(payloadJson || "{}") } catch (e) {}
     root.profiles = payload.profiles || []
     root.icon = String(payload.icon || "")
-    root.selectionFile = String(payload.selectionFile || "")
-    root.doneFile = String(payload.doneFile || "")
     root.hoveredIndex = -1
     root.opened = true
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
+  }
+
+  FileView {
+    id: payloadFile
+    printErrors: false
+    onLoaded: root.show(text())
+    onLoadFailed: root.finish(null)  // nothing to show, but don't leave the script waiting
   }
 
   function close() {
@@ -56,20 +73,23 @@ Item {
     if (root.opened) root.finish(null)
   }
 
-  function finish(dir) {
+  // Answer the waiting script: its chosen profile dir, or null for cancelled.
+  function release(choice) {
+    if (!root.dir) return
+    // The files live in the script's private directory and never exist beforehand;
+    // noclobber (set -C) makes bash refuse to write through anything that does,
+    // symlinks included, instead of truncating it. Detached rather than a Process
+    // so that two answers in quick succession can't lose the second one.
+    var dir = Util.shellQuote(root.dir)
+    Quickshell.execDetached(["bash", "-c", choice === null
+      ? "set -C; : > " + dir + "/done"
+      : "set -C; printf '%s\\n' " + Util.shellQuote(choice) + " > " + dir + "/selection && : > " + dir + "/done"])
+    root.dir = ""
+  }
+
+  function finish(choice) {
     root.opened = false
-    if (root.doneFile) {
-      // The files live in the script's private temp directory and never exist
-      // beforehand; noclobber (set -C) makes bash refuse to write through anything
-      // that does, symlinks included, instead of truncating it.
-      var done = Util.shellQuote(root.doneFile)
-      resultProc.command = dir === null
-        ? ["bash", "-c", "set -C; : > " + done]
-        : ["bash", "-c", "set -C; printf '%s\\n' " + Util.shellQuote(dir) + " > " + Util.shellQuote(root.selectionFile) + " && : > " + done]
-      resultProc.running = true
-    }
-    root.doneFile = ""
-    root.selectionFile = ""
+    root.release(choice)
     if (root.shell && typeof root.shell.hide === "function")
       root.shell.hide((root.manifest && root.manifest.id) || "jimmibram.chrome-launcher")
   }
@@ -86,8 +106,6 @@ Item {
     if (index < 0 || index >= root.profiles.length) return
     root.finish(root.profiles[index].dir)
   }
-
-  Process { id: resultProc }
 
   PanelWindow {
     id: panel

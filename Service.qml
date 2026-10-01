@@ -6,8 +6,10 @@ import qs.Commons
 // Takes over Omarchy's browser key (SUPER+SHIFT+RETURN) while the plugin is
 // enabled, so installing it is all it takes. The binding lives only in the
 // running Hyprland, never in the user's config: it is applied again after every
-// config reload (which drops it), and a reload on disable brings back Omarchy's
-// own browser binding.
+// config reload (which drops it). On disable the key is handed back to Omarchy's
+// own browser launcher, the binding its default config gives it, rather than
+// reloading the whole config: a reload would also discard runtime changes and
+// would run on every shell restart, since that destroys this item too.
 Item {
   id: root
 
@@ -34,8 +36,15 @@ Item {
     Quickshell.execDetached(["hyprctl", "eval", lua])
   }
 
+  function unbind() {
+    var lua = "hl.unbind(" + luaString(root.keys) + ")"
+      + " hl.bind(" + luaString(root.keys) + ", hl.dsp.exec_cmd(\"omarchy-launch-browser\"),"
+      + " { description = \"Browser\" })"
+    Quickshell.execDetached(["hyprctl", "eval", lua])
+  }
+
   Component.onCompleted: root.bind()
-  Component.onDestruction: Quickshell.execDetached(["hyprctl", "reload"])
+  Component.onDestruction: root.unbind()
 
   Connections {
     target: Hyprland
