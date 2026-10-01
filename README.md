@@ -10,7 +10,7 @@ A plugin for the [Omarchy](https://omarchy.org) shell.
 
 ## What it does
 
-- Press your browser key and your profiles appear in a cross around the browser icon.
+- Press your browser key and your profiles appear in a cross, each behind its arrow key.
 - **←** opens the first profile, **→** the second, **↑** the third and **↓** the fourth.
   One key press, no Enter needed.
 - The new window always opens on your **current workspace**. Chrome normally
@@ -91,5 +91,4 @@ omarchy plugin remove jimmibram.chrome-launcher
 MIT. See [LICENSE](LICENSE).
 
 Not affiliated with or endorsed by Google. Google Chrome is a trademark of
-Google LLC. The plugin shows the browser icon that is installed on your own
-system; it doesn't ship any Google artwork.
+Google LLC. The plugin doesn't ship any Google artwork.
