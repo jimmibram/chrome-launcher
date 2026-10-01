@@ -208,14 +208,12 @@ Item {
             model: Math.min(root.profiles.length, 4)
 
             // A keycap with a triangle, drawn pointing right and rotated towards
-            // its profile's slot. Only the triangle turns: the cap and its base
-            // stay upright so the base edge is at the bottom of every key.
+            // its profile's slot. Only the triangle turns; the cap stays upright.
             delegate: Item {
               id: keycap
               required property int index
               readonly property var dir: root.slots[index]  // [col, row], centre is [1, 1]
               readonly property real inset: Style.space(10)
-              readonly property real lift: Math.max(2, Style.space(3))  // the cap sits this far above its base
               readonly property bool chosen: index === root.chosenIndex
               readonly property bool lit: chosen || (root.chosenIndex === -1 && index === root.hoveredIndex)
 
@@ -226,19 +224,9 @@ Item {
               scale: lit ? 1.1 : 1
               Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
 
-              // Base: the darker edge the cap stands on.
-              Rectangle {
-                anchors.fill: cap
-                anchors.topMargin: keycap.lift
-                anchors.bottomMargin: -keycap.lift
-                radius: cap.radius
-                color: keycap.lit ? Qt.darker(root.selectedBackground, 1.4) : Qt.rgba(root.border.r, root.border.g, root.border.b, 0.9)
-              }
-
               Rectangle {
                 id: cap
                 anchors.fill: parent
-                anchors.bottomMargin: keycap.lift
                 radius: Style.space(8)
                 color: keycap.lit ? root.selectedBackground : root.background
                 border.width: keycap.chosen ? Math.max(2, Style.space(2)) : Math.max(1, Style.space(1))
