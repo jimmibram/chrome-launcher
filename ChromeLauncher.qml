@@ -21,7 +21,7 @@ Item {
   property bool opened: false
   property var profiles: []
   property int hoveredIndex: -1
-  property int chosenIndex: -1  // the profile just picked, shown lit while the rest dims
+  property int chosenIndex: -1  // the profile just picked, shown with a bright edge
   property string dir: ""  // the waiting script's directory, empty once answered
 
   property color background: Color.menu.background
@@ -107,7 +107,7 @@ Item {
 
   function activate(index) {
     if (index < 0 || index >= root.profiles.length || root.chosenIndex !== -1) return
-    // Light the choice up and dim the rest for a beat, then open it.
+    // Outline the choice for a beat, then open it.
     root.chosenIndex = index
     confirmTimer.start()
   }
@@ -178,7 +178,7 @@ Item {
         height: root.step * (1 + root.hasUp + root.hasDown) - root.tileSpacing
 
         // The centre: a label, and a keycap for each profile's arrow key at the
-        // edge nearest to it. The chosen one lights up; the rest dim with the tiles.
+        // edge nearest to it. The chosen one gets a bright edge, like its tile.
         Rectangle {
           x: root.step
           y: (1 - root.topRow) * root.step
@@ -195,14 +195,13 @@ Item {
             text: "SELECT PROFILE"
             textFormat: Text.PlainText
             color: root.foreground
-            opacity: root.chosenIndex === -1 ? 0.7 : 0.3
+            opacity: 0.7
             font.family: root.fontFamily
             font.pixelSize: Style.font.bodySmall
             font.weight: Font.DemiBold
             font.letterSpacing: Style.space(2)
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
-            Behavior on opacity { NumberAnimation { duration: 120 } }
           }
 
           Repeater {
@@ -216,17 +215,15 @@ Item {
               readonly property var dir: root.slots[index]  // [col, row], centre is [1, 1]
               readonly property real inset: Style.space(10)
               readonly property real lift: Math.max(2, Style.space(3))  // the cap sits this far above its base
-              readonly property bool lit: index === root.chosenIndex || (root.chosenIndex === -1 && index === root.hoveredIndex)
-              readonly property bool dimmed: root.chosenIndex !== -1 && index !== root.chosenIndex
+              readonly property bool chosen: index === root.chosenIndex
+              readonly property bool lit: chosen || (root.chosenIndex === -1 && index === root.hoveredIndex)
 
               width: root.keycapSize
               height: root.keycapSize
               x: dir[0] === 0 ? inset : dir[0] === 2 ? parent.width - width - inset : (parent.width - width) / 2
               y: dir[1] === 0 ? inset : dir[1] === 2 ? parent.height - height - inset : (parent.height - height) / 2
               rotation: [180, 0, 270, 90][index]
-              opacity: dimmed ? 0.3 : 1
               scale: lit ? 1.1 : 1
-              Behavior on opacity { NumberAnimation { duration: 120 } }
               Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
 
               // Base: the darker edge the cap stands on, offset along the key's
@@ -245,8 +242,9 @@ Item {
                 anchors.bottomMargin: keycap.lift
                 radius: Style.space(8)
                 color: keycap.lit ? root.selectedBackground : root.background
-                border.width: Math.max(1, Style.space(1))
-                border.color: keycap.lit ? root.selectedBackground : root.border
+                border.width: keycap.chosen ? Math.max(2, Style.space(2)) : Math.max(1, Style.space(1))
+                border.color: keycap.chosen ? root.selectedText : keycap.lit ? root.selectedBackground : root.border
+                Behavior on border.color { ColorAnimation { duration: 120 } }
 
                 Shape {
                   id: triangle
@@ -276,8 +274,8 @@ Item {
           delegate: Rectangle {
             required property var modelData
             required property int index
-            readonly property bool current: index === root.chosenIndex || (root.chosenIndex === -1 && index === root.hoveredIndex)
-            readonly property bool dimmed: root.chosenIndex !== -1 && index !== root.chosenIndex
+            readonly property bool chosen: index === root.chosenIndex
+            readonly property bool current: chosen || (root.chosenIndex === -1 && index === root.hoveredIndex)
             readonly property var slot: root.slots[index]
 
             x: slot[0] * root.step
@@ -286,10 +284,9 @@ Item {
             height: root.tileSize
             radius: root.cornerRadius
             color: current ? root.selectedBackground : "transparent"
-            opacity: dimmed ? 0.3 : 1
-            Behavior on opacity { NumberAnimation { duration: 120 } }
-            border.width: Math.max(1, Style.space(1))
-            border.color: current ? root.selectedBackground : root.border
+            border.width: chosen ? Math.max(2, Style.space(2)) : Math.max(1, Style.space(1))
+            border.color: chosen ? root.selectedText : current ? root.selectedBackground : root.border
+            Behavior on border.color { ColorAnimation { duration: 120 } }
 
             Column {
               anchors.centerIn: parent
