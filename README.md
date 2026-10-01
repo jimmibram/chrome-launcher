@@ -13,6 +13,8 @@ A plugin for the [Omarchy](https://omarchy.org) shell.
 - Press your browser key and your profiles appear in a cross, each behind its arrow key.
 - **←** opens the first profile, **→** the second, **↑** the third and **↓** the fourth.
   One key press, no Enter needed.
+- With five or more profiles they line up in a row instead, numbered, and the
+  keys **1** to **9** open them.
 - The new window always opens on your **current workspace**. Chrome normally
   places it next to that profile's existing window, somewhere else, and pulls
   you along with it.
@@ -48,12 +50,13 @@ need them.
 
 | Key | Action |
 |---|---|
-| ← → ↑ ↓ | Open that profile in a new window |
+| ← → ↑ ↓ | Open that profile in a new window (up to four profiles) |
+| 1 … 9 | Open that profile in a new window (five or more, shown in a row) |
 | Esc, or click outside | Cancel |
 | Mouse | Hover a profile to light up its arrow, click to open |
 
-Profiles appear in the order Chrome keeps them in, so each arrow always opens
-the same profile. The picker shows up to four profiles, one per arrow.
+Profiles appear in the order Chrome keeps them in, so each key always opens
+the same profile. The picker shows up to nine profiles.
 
 To force a browser regardless of your default, pass it as an argument:
 

@@ -7,8 +7,9 @@ import QtQuick.Shapes
 import qs.Commons
 import qs.Ui
 
-// Profiles laid out as a cross around an empty centre: left, right, then up and
-// down once there are 3-4 profiles. An arrow key opens its profile at once.
+// Up to four profiles are laid out as a cross around an empty centre: left,
+// right, then up and down, and an arrow key opens its profile at once. Five or
+// more go in a row, numbered, and the digit keys 1-9 open them.
 // Summoned by bin/chrome-launcher with { dir }, the script's private directory.
 // dir/payload.json holds { profiles: [{ dir, name, email, picture }] }.
 // The chosen profile's dir is written to dir/selection, then dir/done is created.
@@ -105,6 +106,64 @@ Item {
   readonly property int topRow: hasUp ? 0 : 1
   readonly property int step: tileSize + tileSpacing
 
+  // Five or more profiles: a numbered row instead of the cross, up to nine (one
+  // per digit key). Tiles narrow to fit the screen, and grow a keycap on top.
+  readonly property bool rowMode: profiles.length > 4
+  readonly property int shown: Math.min(profiles.length, rowMode ? 9 : 4)
+  readonly property int rowTileWidth: Math.max(avatarSize + Style.space(24),
+    Math.min(tileSize, Math.floor((panel.width - contentMargin * 2 - Style.space(80) - (shown - 1) * tileSpacing) / Math.max(shown, 1))))
+  readonly property int rowTileHeight: tileSize + keycapSize + Style.space(8)
+  readonly property int rowLabelHeight: Style.space(32)
+
+  // A key on the keyboard: a triangle pointing at its profile in the cross, or
+  // a digit in the row. Lights up when hovered, gets a bright edge when chosen.
+  component Keycap: Rectangle {
+    id: keycap
+    property bool lit: false
+    property bool chosen: false
+    property string label: ""   // a digit; empty draws the triangle instead
+    property int arrowIndex: 0  // slot the triangle points at
+
+    width: root.keycapSize
+    height: root.keycapSize
+    radius: Style.space(8)
+    color: lit ? root.selectedBackground : root.background
+    border.width: chosen ? Math.max(2, Style.space(2)) : Math.max(1, Style.space(1))
+    border.color: chosen ? root.selectedText : lit ? root.selectedBackground : root.border
+    scale: lit ? 1.1 : 1
+
+    Shape {
+      id: triangle
+      visible: keycap.label === ""
+      anchors.centerIn: parent
+      width: parent.width * 0.42
+      height: parent.height * 0.42
+      rotation: [180, 0, 270, 90][keycap.arrowIndex]
+      preferredRendererType: Shape.CurveRenderer
+
+      ShapePath {
+        strokeWidth: -1
+        fillColor: keycap.lit ? root.selectedText : root.foreground
+        joinStyle: ShapePath.RoundJoin
+        startX: 0; startY: 0
+        PathLine { x: triangle.width; y: triangle.height / 2 }
+        PathLine { x: 0; y: triangle.height }
+        PathLine { x: 0; y: 0 }
+      }
+    }
+
+    Text {
+      visible: keycap.label !== ""
+      anchors.centerIn: parent
+      text: keycap.label
+      textFormat: Text.PlainText
+      color: keycap.lit ? root.selectedText : root.foreground
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.heading
+      font.weight: Font.DemiBold
+    }
+  }
+
   function activate(index) {
     if (index < 0 || index >= root.profiles.length || root.chosenIndex !== -1) return
     // Outline the choice and answer the script at once, so the browser starts
@@ -161,6 +220,8 @@ Item {
         Keys.onPressed: function(event) {
           var k = event.key
           if (k === Qt.Key_Escape) { if (root.chosenIndex === -1) root.finish(null) }
+          else if (k >= Qt.Key_1 && k <= Qt.Key_9) root.activate(k - Qt.Key_1)
+          else if (root.rowMode) return
           else if (k === Qt.Key_Left) root.activate(0)
           else if (k === Qt.Key_Right) root.activate(1)
           else if (k === Qt.Key_Up) root.activate(2)
@@ -173,12 +234,34 @@ Item {
       Item {
         id: tiles
         anchors.centerIn: parent
-        width: root.step * 3 - root.tileSpacing
-        height: root.step * (1 + root.hasUp + root.hasDown) - root.tileSpacing
+        width: root.rowMode
+          ? root.shown * (root.rowTileWidth + root.tileSpacing) - root.tileSpacing
+          : root.step * 3 - root.tileSpacing
+        height: root.rowMode
+          ? root.rowLabelHeight + root.rowTileHeight
+          : root.step * (1 + root.hasUp + root.hasDown) - root.tileSpacing
 
-        // The centre: a label, and a keycap for each profile's arrow key at the
-        // edge nearest to it. The chosen one gets a bright edge, like its tile.
+        // Row: the label goes above the tiles.
+        Text {
+          visible: root.rowMode
+          width: parent.width
+          height: root.rowLabelHeight
+          text: "SELECT PROFILE"
+          textFormat: Text.PlainText
+          color: root.foreground
+          opacity: 0.7
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.bodySmall
+          font.weight: Font.DemiBold
+          font.letterSpacing: Style.space(2)
+          horizontalAlignment: Text.AlignHCenter
+          verticalAlignment: Text.AlignTop
+        }
+
+        // Cross: the centre holds the label and a keycap for each profile's
+        // arrow key at the edge nearest to it.
         Rectangle {
+          visible: !root.rowMode
           x: root.step
           y: (1 - root.topRow) * root.step
           width: root.tileSize
@@ -204,69 +287,36 @@ Item {
           }
 
           Repeater {
-            model: Math.min(root.profiles.length, 4)
+            model: root.rowMode ? 0 : root.shown
 
-            // A keycap with a triangle, drawn pointing right and rotated towards
-            // its profile's slot. Only the triangle turns; the cap stays upright.
-            delegate: Item {
-              id: keycap
+            delegate: Keycap {
               required property int index
               readonly property var dir: root.slots[index]  // [col, row], centre is [1, 1]
               readonly property real inset: Style.space(10)
-              readonly property bool chosen: index === root.chosenIndex
-              readonly property bool lit: chosen || (root.chosenIndex === -1 && index === root.hoveredIndex)
-
-              width: root.keycapSize
-              height: root.keycapSize
+              arrowIndex: index
+              chosen: index === root.chosenIndex
+              lit: chosen || (root.chosenIndex === -1 && index === root.hoveredIndex)
               x: dir[0] === 0 ? inset : dir[0] === 2 ? parent.width - width - inset : (parent.width - width) / 2
               y: dir[1] === 0 ? inset : dir[1] === 2 ? parent.height - height - inset : (parent.height - height) / 2
-              scale: lit ? 1.1 : 1
-
-              Rectangle {
-                id: cap
-                anchors.fill: parent
-                radius: Style.space(8)
-                color: keycap.lit ? root.selectedBackground : root.background
-                border.width: keycap.chosen ? Math.max(2, Style.space(2)) : Math.max(1, Style.space(1))
-                border.color: keycap.chosen ? root.selectedText : keycap.lit ? root.selectedBackground : root.border
-
-                Shape {
-                  id: triangle
-                  anchors.centerIn: parent
-                  width: parent.width * 0.42
-                  height: parent.height * 0.42
-                  rotation: [180, 0, 270, 90][keycap.index]
-                  preferredRendererType: Shape.CurveRenderer
-
-                  ShapePath {
-                    strokeWidth: -1
-                    fillColor: keycap.lit ? root.selectedText : root.foreground
-                    joinStyle: ShapePath.RoundJoin
-                    startX: 0; startY: 0
-                    PathLine { x: triangle.width; y: triangle.height / 2 }
-                    PathLine { x: 0; y: triangle.height }
-                    PathLine { x: 0; y: 0 }
-                  }
-                }
-              }
             }
           }
         }
 
         Repeater {
-          model: root.profiles.slice(0, 4)
+          model: root.profiles.slice(0, root.shown)
 
           delegate: Rectangle {
+            id: tile
             required property var modelData
             required property int index
             readonly property bool chosen: index === root.chosenIndex
             readonly property bool current: chosen || (root.chosenIndex === -1 && index === root.hoveredIndex)
-            readonly property var slot: root.slots[index]
+            readonly property var slot: root.slots[Math.min(index, 3)]
 
-            x: slot[0] * root.step
-            y: (slot[1] - root.topRow) * root.step
-            width: root.tileSize
-            height: root.tileSize
+            x: root.rowMode ? index * (root.rowTileWidth + root.tileSpacing) : slot[0] * root.step
+            y: root.rowMode ? root.rowLabelHeight : (slot[1] - root.topRow) * root.step
+            width: root.rowMode ? root.rowTileWidth : root.tileSize
+            height: root.rowMode ? root.rowTileHeight : root.tileSize
             radius: root.cornerRadius
             color: current ? root.selectedBackground : "transparent"
             border.width: chosen ? Math.max(2, Style.space(2)) : Math.max(1, Style.space(1))
@@ -276,6 +326,15 @@ Item {
               anchors.centerIn: parent
               width: parent.width - Style.space(16)
               spacing: Style.space(8)
+
+              // Row: the digit that opens this profile sits above its picture.
+              Keycap {
+                visible: root.rowMode
+                anchors.horizontalCenter: parent.horizontalCenter
+                label: String(index + 1)
+                chosen: tile.chosen
+                lit: tile.current
+              }
 
               ClippingRectangle {
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -317,7 +376,7 @@ Item {
                 width: parent.width
                 textFormat: Text.PlainText
                 text: modelData.email || ""
-                visible: text !== ""
+                visible: root.rowMode || text !== ""  // in the row, keep the line so tiles align
                 color: current ? root.selectedText : root.foreground
                 opacity: 0.65
                 font.family: root.fontFamily
