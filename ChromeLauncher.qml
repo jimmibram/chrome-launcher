@@ -59,10 +59,13 @@ Item {
   function finish(dir) {
     root.opened = false
     if (root.doneFile) {
+      // The files live in the script's private temp directory and never exist
+      // beforehand; noclobber (set -C) makes bash refuse to write through anything
+      // that does, symlinks included, instead of truncating it.
       var done = Util.shellQuote(root.doneFile)
       resultProc.command = dir === null
-        ? ["bash", "-c", ": > " + done]
-        : ["bash", "-c", "printf '%s\\n' " + Util.shellQuote(dir) + " > " + Util.shellQuote(root.selectionFile) + "; : > " + done]
+        ? ["bash", "-c", "set -C; : > " + done]
+        : ["bash", "-c", "set -C; printf '%s\\n' " + Util.shellQuote(dir) + " > " + Util.shellQuote(root.selectionFile) + " && : > " + done]
       resultProc.running = true
     }
     root.doneFile = ""

@@ -28,10 +28,12 @@ for size in 256x256 128x128 64x64 48x48; do
   [[ -f /usr/share/icons/hicolor/$size/apps/$class.png ]] && icon=/usr/share/icons/hicolor/$size/apps/$class.png && break
 done
 
-selection_file=$(mktemp)
-done_file=$(mktemp)
-rm -f "$done_file"
-trap 'rm -f "$selection_file" "$done_file"' EXIT
+# Both result files live in a private directory (mktemp -d creates it 0700), so no
+# other user can plant a symlink at their paths before the picker writes them.
+tmpdir=$(mktemp -d)
+selection_file=$tmpdir/selection
+done_file=$tmpdir/done
+trap 'rm -rf "$tmpdir"' EXIT
 
 # Profiles as a cross (plugin jimmibram.chrome-launcher), in the browser's own order:
 # first is left, second right, third up, fourth down.
@@ -94,7 +96,7 @@ rule() {
 }
 
 coproc WATCH { timeout 10 socat -u "UNIX-CONNECT:$events" - 2>/dev/null; }
-trap 'rule false; kill "$WATCH_PID" 2>/dev/null || true; rm -f "$selection_file" "$done_file"' EXIT
+trap 'rule false; kill "$WATCH_PID" 2>/dev/null || true; rm -rf "$tmpdir"' EXIT
 rule true
 sleep 0.1  # let the watcher connect first
 # Start the browser directly: omarchy-launch-browser takes its first argument for a
