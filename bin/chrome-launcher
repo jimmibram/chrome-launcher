@@ -136,6 +136,23 @@ setsid -f uwsm-app -- "$command" --profile-directory="$dir" --new-window >/dev/n
 
 # Done once a window of this browser appears on our workspace. (The browser's
 # running process opens it, so there is no PID of our own to recognise it by.)
+address=""
 while IFS= read -r line <&"${WATCH[0]}"; do
-  [[ $line == openwindow\>\>*,"$workspace","$class",* ]] && break
+  if [[ $line == openwindow\>\>*,"$workspace","$class",* ]]; then
+    address=${line#openwindow>>}
+    address=0x${address%%,*}
+    break
+  fi
 done
+
+# The new window doesn't get focus by itself: it appears while the picker still
+# holds the keyboard, and when the picker closes, Hyprland gives focus back to
+# the window that had it before. So wait for the picker to go, then focus it.
+if [[ $address =~ ^0x[0-9a-f]+$ ]]; then
+  for _ in {1..20}; do
+    hyprctl layers -j | grep -q '"jimmibram-chrome-launcher"' || break
+    sleep 0.05
+  done
+  hyprctl dispatch "hl.dsp.focus({ window = \"address:$address\" })" >/dev/null 2>&1 ||
+    hyprctl dispatch focuswindow "address:$address" >/dev/null
+fi
