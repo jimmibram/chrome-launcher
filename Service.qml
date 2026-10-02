@@ -1,55 +1,37 @@
-import Quickshell
-import Quickshell.Hyprland
+import Quickshell.Io
 import QtQuick
-import qs.Commons
 
-// Takes over Omarchy's browser key (SUPER+SHIFT+RETURN) while the plugin is
-// enabled, so installing it is all it takes. The binding lives only in the
-// running Hyprland, never in the user's config: it is applied again after every
-// config reload (which drops it). On disable the key is handed back to Omarchy's
-// own browser launcher, the binding its default config gives it, rather than
-// reloading the whole config: a reload would also discard runtime changes and
-// would run on every shell restart, since that destroys this item too.
+// The service entry point. It only loads KeyBinding.qml, which takes over the
+// browser key. As with ChromeLauncher.qml, a URL the shell has never seen
+// makes it load the new code after an update. The shell keeps this service
+// running through updates, so it also loads KeyBinding.qml again whenever the
+// file changes. Keep this file unchanged between releases.
 Item {
   id: root
 
   property var shell: null
   property var manifest: null
 
-  readonly property string keys: "SUPER + SHIFT + RETURN"
-  readonly property string script: decodeURIComponent(String(Qt.resolvedUrl("bin/chrome-launcher")).replace(/^file:\/\//, ""))
+  readonly property url source: Qt.resolvedUrl("KeyBinding.qml")
+  property string loadUrl: root.source + "?load=" + Date.now()
 
-  // Quote a value as a Lua string literal: backslash, double quote and control
-  // characters become \ddd escapes, so nothing in it can be read as code.
-  function luaString(value) {
-    return '"' + String(value).replace(/[\\"\x00-\x1f\x7f]/g, function(c) {
-      var n = c.charCodeAt(0)
-      return "\\" + (n < 10 ? "00" : n < 100 ? "0" : "") + n
-    }) + '"'
+  FileView {
+    path: decodeURIComponent(String(root.source).replace(/^file:\/\//, ""))
+    watchChanges: true
+    printErrors: false
+    onFileChanged: {
+      // The new code binds the key itself, so the old must not hand it back.
+      if (binding.item) binding.item.handedOver = true
+      root.loadUrl = root.source + "?load=" + Date.now()
+    }
   }
 
-  function bind() {
-    // exec_cmd runs its argument through /bin/sh, so the path is shell-quoted too.
-    var lua = "hl.unbind(" + luaString(root.keys) + ")"
-      + " hl.bind(" + luaString(root.keys) + ", hl.dsp.exec_cmd(" + luaString(Util.shellQuote(root.script)) + "),"
-      + " { description = \"Chrome Launcher\" })"
-    Quickshell.execDetached(["hyprctl", "eval", lua])
-  }
-
-  function unbind() {
-    var lua = "hl.unbind(" + luaString(root.keys) + ")"
-      + " hl.bind(" + luaString(root.keys) + ", hl.dsp.exec_cmd(\"omarchy-launch-browser\"),"
-      + " { description = \"Browser\" })"
-    Quickshell.execDetached(["hyprctl", "eval", lua])
-  }
-
-  Component.onCompleted: root.bind()
-  Component.onDestruction: root.unbind()
-
-  Connections {
-    target: Hyprland
-    function onRawEvent(event) {
-      if (event && event.name === "configreloaded") root.bind()
+  Loader {
+    id: binding
+    source: root.loadUrl
+    onLoaded: {
+      item.shell = Qt.binding(function() { return root.shell })
+      item.manifest = Qt.binding(function() { return root.manifest })
     }
   }
 }
